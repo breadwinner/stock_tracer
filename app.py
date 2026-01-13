@@ -56,11 +56,19 @@ def save_data(df):
     """将 DataFrame 写回 Google Sheets"""
     conn = st.connection("gsheets", type=GSheetsConnection)
     
-    # 写入前处理日期格式，防止JSON序列化报错
+    # 复制一份数据进行处理，以免影响原数据
     save_df = df.copy()
+    
+    # --- 修复核心：强制转换为 datetime 类型 ---
+    # errors='coerce' 会把无法转换的数据（如空字符串、乱码）变成 NaT (时间格式的空值)
+    save_df['open_date'] = pd.to_datetime(save_df['open_date'], errors='coerce')
+    save_df['close_date'] = pd.to_datetime(save_df['close_date'], errors='coerce')
+
+    # --- 现在可以安全使用 .dt 了 ---
     save_df['open_date'] = save_df['open_date'].dt.strftime('%Y-%m-%d')
     save_df['close_date'] = save_df['close_date'].dt.strftime('%Y-%m-%d')
-    # 处理 NaN 为 None 或 空字符串，让表格好看点
+    
+    # 把 NaT 和 NaN 替换成空字符串，保持 Google Sheets 干净
     save_df = save_df.fillna("")
     
     conn.update(worksheet="Sheet1", data=save_df)
@@ -219,9 +227,10 @@ if open_df.empty:
     st.info("目前空仓，请在左侧添加买入记录。")
 else:
     open_df['Cost Basis'] = open_df['buy_price'] * open_df['quantity']
-    # 格式化显示日期
+   # 格式化显示日期
     display_open = open_df.copy()
-    display_open['open_date'] = display_open['open_date'].dt.date
+    # 强制转为 datetime 后再取 date，防止报错    
+    display_open['open_date'] = pd.to_datetime(display_open['open_date'], errors='coerce').dt.date
     st.dataframe(display_open[['symbol', 'buy_price', 'quantity', 'open_date', 'notes']], use_container_width=True)
     st.caption(f"当前持仓总成本: ${open_df['Cost Basis'].sum():,.2f}")
 
@@ -259,8 +268,14 @@ if not closed_df.empty:
     with st.expander("查看详细历史交易记录"):
         display_cols = ['symbol', 'open_date', 'close_date', 'buy_price', 'sell_price', 'quantity', 'pnl', 'pnl_percent', 'notes']
         display_closed = closed_df[display_cols].copy()
-        display_closed['open_date'] = display_closed['open_date'].dt.date
-        display_closed['close_date'] = display_closed['close_date'].dt.date
+        
+        # --- 修复点：强制转换后再取 .dt.date ---
+        display_closed['open_date'] = pd.to_datetime(display_closed['open_date'], errors='coerce').dt.date
+        display_closed['close_date'] = pd.to_datetime(display_closed['close_date'], errors='coerce').dt.date
+        
+        st.dataframe(display_closed, use_container_width=True)
+        csv = display_closed.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 导出历史记录 CSV", csv, "closed_trades.csv", "text/csv")
         
         st.dataframe(display_closed, use_container_width=True)
         csv = display_closed.to_csv(index=False).encode('utf-8')
