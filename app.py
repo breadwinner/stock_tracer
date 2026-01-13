@@ -17,7 +17,7 @@ COLUMNS = [
 
 @st.cache_data(ttl=None)
 def get_data_cached():
-      """带缓存的读取函数"""
+    """带缓存的读取函数"""
     conn = st.connection("gsheets", type=GSheetsConnection)
     # 这里不需要 ttl=0 了，因为外层有 cache_data 控制
     df = conn.read(worksheet="Sheet1")
