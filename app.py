@@ -21,7 +21,7 @@ def get_data():
     # 建立连接
     conn = st.connection("gsheets", type=GSheetsConnection)
     # ttl=0 表示不缓存，每次都强制从云端拉取最新数据
-    df = conn.read(worksheet="Sheet1"）
+    df = conn.read(worksheet="Sheet1")
     
     # 如果是空表，初始化列名
     if df.empty or len(df.columns) < len(COLUMNS):
