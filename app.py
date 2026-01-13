@@ -275,11 +275,12 @@ if not closed_df.empty:
         
         st.dataframe(display_closed, use_container_width=True)
         csv = display_closed.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 导出历史记录 CSV", csv, "closed_trades.csv", "text/csv")
+        st.download_button(label="📥 导出历史记录 CSV",data=csv,file_name="closed_trades.csv",mime="text/csv",key="download_closed_trades_btn")
         
         st.dataframe(display_closed, use_container_width=True)
         csv = display_closed.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 导出历史记录 CSV", csv, "closed_trades.csv", "text/csv")
+        st.download_button(label="📥 导出历史记录 CSV",data=csv,file_name="closed_trades.csv",mime="text/csv",key="download_closed_trades_btn")
+        
 else:
     st.info("暂无卖出记录。")
 
