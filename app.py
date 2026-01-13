@@ -75,7 +75,7 @@ def save_data(df):
 
 def add_buy_position(symbol, buy_price, quantity, open_date, notes):
     """开仓（买入）- 追加行"""
-    # df = get_data()
+    df = get_data()
     
     # 自动生成 ID (取当前最大ID + 1)
     new_id = 1
