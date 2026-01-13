@@ -83,11 +83,14 @@ def add_buy_position(symbol, buy_price, quantity, open_date, notes):
     """开仓（买入）- 追加行"""
     df = get_data()
     
-    # 自动生成 ID (取当前最大ID + 1)
+    # --- 修复 ID 生成逻辑 ---
     new_id = 1
     if not df.empty and 'id' in df.columns:
-        if df['id'].max() > 0:
-            new_id = int(df['id'].max()) + 1
+        # 强制把 id 列转为数字，无法转的变成 NaN
+        max_id = pd.to_numeric(df['id'], errors='coerce').max()
+        if pd.notna(max_id):  # 如果 max_id 不是 NaN
+            new_id = int(max_id) + 1
+    # -----------------------
             
     new_row = pd.DataFrame([{
         "id": new_id,
@@ -96,7 +99,7 @@ def add_buy_position(symbol, buy_price, quantity, open_date, notes):
         "sell_price": 0.0,
         "quantity": quantity,
         "open_date": pd.to_datetime(open_date),
-        "close_date": None,
+        "close_date": None, # 这里留 None，会在 save_data 里被转为空字符串
         "pnl": 0.0,
         "pnl_percent": 0.0,
         "status": "OPEN",
