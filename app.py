@@ -15,12 +15,12 @@ COLUMNS = [
     "open_date", "close_date", "pnl", "pnl_percent", "status", "notes"
 ]
 
-def get_data():
-    """从 Google Sheets 读取数据"""
-    # 建立连接
+@st.cache_data(ttl=None)
+def get_data_cached():
+      """带缓存的读取函数"""
     conn = st.connection("gsheets", type=GSheetsConnection)
-    # ttl=0 表示不缓存，每次都强制从云端拉取最新数据
-    df = conn.read(worksheet="Sheet1", ttl=0)
+    # 这里不需要 ttl=0 了，因为外层有 cache_data 控制
+    df = conn.read(worksheet="Sheet1")
     
     # 如果是空表，初始化列名
     if df.empty or len(df.columns) < len(COLUMNS):
@@ -52,6 +52,9 @@ def get_data():
     
     return df
 
+def get_data():
+    return get_data_cached()
+    
 def save_data(df):
     """将 DataFrame 写回 Google Sheets"""
     conn = st.connection("gsheets", type=GSheetsConnection)
