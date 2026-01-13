@@ -53,24 +53,30 @@ def get_data():
     return df
     
 def save_data(df):
-    """将 DataFrame 写回 Google Sheets"""
+    """将 DataFrame 写回 Google Sheets (增强版：强制类型转换)"""
     conn = st.connection("gsheets", type=GSheetsConnection)
     
-    # 复制一份数据进行处理，以免影响原数据
+    # 1. 复制数据，避免修改原始缓存
     save_df = df.copy()
     
-    # --- 修复核心：强制转换为 datetime 类型 ---
-    # errors='coerce' 会把无法转换的数据（如空字符串、乱码）变成 NaT (时间格式的空值)
-    save_df['open_date'] = pd.to_datetime(save_df['open_date'], errors='coerce')
-    save_df['close_date'] = pd.to_datetime(save_df['close_date'], errors='coerce')
-
-    # --- 现在可以安全使用 .dt 了 ---
-    save_df['open_date'] = save_df['open_date'].dt.strftime('%Y-%m-%d')
-    save_df['close_date'] = save_df['close_date'].dt.strftime('%Y-%m-%d')
+    # 2. 处理日期：强制转为字符串，处理空时间
+    # 如果是 NaT (空时间)，会被转为 "NaT" 字符串，后面要处理掉
+    save_df['open_date'] = pd.to_datetime(save_df['open_date'], errors='coerce').dt.strftime('%Y-%m-%d')
+    save_df['close_date'] = pd.to_datetime(save_df['close_date'], errors='coerce').dt.strftime('%Y-%m-%d')
     
-    # 把 NaT 和 NaN 替换成空字符串，保持 Google Sheets 干净
+    # 3. 处理空值：把所有的 NaN, None, "NaT" 都变成空字符串 ""
     save_df = save_df.fillna("")
+    save_df = save_df.replace("NaT", "")
     
+    # 4. 【关键一步】处理数字类型 (Numpy -> Python原生)
+    # Google Sheets API 极其讨厌 numpy.int64，必须转为标准 int
+    # 这里的操作是把所有数字列强制转换为 Python 对象类型
+    if 'id' in save_df.columns:
+        save_df['id'] = save_df['id'].apply(lambda x: int(x) if x != "" else "")
+    if 'quantity' in save_df.columns:
+        save_df['quantity'] = save_df['quantity'].apply(lambda x: int(x) if x != "" else "")
+        
+    # 5. 写入
     conn.update(worksheet="Sheet1", data=save_df)
 
 def add_buy_position(symbol, buy_price, quantity, open_date, notes):
