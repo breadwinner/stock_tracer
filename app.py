@@ -229,7 +229,8 @@ else:
     open_df['Cost Basis'] = open_df['buy_price'] * open_df['quantity']
     # 格式化显示日期
     display_open = open_df.copy()
-    display_open['open_date'] = display_open['open_date'].dt.date
+    # 强制转为 datetime 后再取 date，防止报错
+    display_open['open_date'] = pd.to_datetime(display_open['open_date'], errors='coerce').dt.date
     st.dataframe(display_open[['symbol', 'buy_price', 'quantity', 'open_date', 'notes']], use_container_width=True)
     st.caption(f"当前持仓总成本: ${open_df['Cost Basis'].sum():,.2f}")
 
@@ -267,8 +268,10 @@ if not closed_df.empty:
     with st.expander("查看详细历史交易记录"):
         display_cols = ['symbol', 'open_date', 'close_date', 'buy_price', 'sell_price', 'quantity', 'pnl', 'pnl_percent', 'notes']
         display_closed = closed_df[display_cols].copy()
-        display_closed['open_date'] = display_closed['open_date'].dt.date
-        display_closed['close_date'] = display_closed['close_date'].dt.date
+        
+        # --- 修复点：强制转换后再取 .dt.date ---
+        display_closed['open_date'] = pd.to_datetime(display_closed['open_date'], errors='coerce').dt.date
+        display_closed['close_date'] = pd.to_datetime(display_closed['close_date'], errors='coerce').dt.date
         
         st.dataframe(display_closed, use_container_width=True)
         csv = display_closed.to_csv(index=False).encode('utf-8')
