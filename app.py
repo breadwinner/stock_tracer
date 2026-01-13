@@ -15,13 +15,12 @@ COLUMNS = [
     "open_date", "close_date", "pnl", "pnl_percent", "status", "notes"
 ]
 
-@st.cache_data(ttl=None)
 def get_data():
     """从 Google Sheets 读取数据"""
     # 建立连接
     conn = st.connection("gsheets", type=GSheetsConnection)
     # ttl=0 表示不缓存，每次都强制从云端拉取最新数据
-    df = conn.read(worksheet="Sheet1")
+    df = conn.read(worksheet="Sheet1", ttl=0)
     
     # 如果是空表，初始化列名
     if df.empty or len(df.columns) < len(COLUMNS):
@@ -76,7 +75,7 @@ def save_data(df):
 
 def add_buy_position(symbol, buy_price, quantity, open_date, notes):
     """开仓（买入）- 追加行"""
-    df = get_data()
+    # df = get_data()
     
     # 自动生成 ID (取当前最大ID + 1)
     new_id = 1
@@ -101,8 +100,6 @@ def add_buy_position(symbol, buy_price, quantity, open_date, notes):
     # 追加并保存
     updated_df = pd.concat([df, new_row], ignore_index=True)
     save_data(updated_df)
-
-    get_data.clear()
 
 def close_position(trade_id, sell_price, close_date, notes):
     """平仓（卖出）- 更新行"""
@@ -136,7 +133,6 @@ def close_position(trade_id, sell_price, close_date, notes):
         df.at[idx, 'notes'] = new_notes
         
         save_data(df)
-        get_data.clear()
 
 def delete_trade(trade_id):
     """删除记录"""
@@ -144,7 +140,6 @@ def delete_trade(trade_id):
     # 过滤掉要删除的 ID
     df = df[df['id'] != trade_id]
     save_data(df)
-    get_data.clear()
 
 def get_open_positions():
     df = get_data()
