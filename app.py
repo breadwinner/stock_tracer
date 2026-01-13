@@ -20,7 +20,7 @@ def get_data():
     # 建立连接
     conn = st.connection("gsheets", type=GSheetsConnection)
     # ttl=0 表示不缓存，每次都强制从云端拉取最新数据
-    df = conn.read(worksheet="Sheet1", ttl=5)
+    df = conn.read(worksheet="Sheet1", ttl=0)
     
     # 如果是空表，初始化列名
     if df.empty or len(df.columns) < len(COLUMNS):
@@ -51,46 +51,37 @@ def get_data():
     df['close_date'] = pd.to_datetime(df['close_date'], errors='coerce')
     
     return df
-    
+
 def save_data(df):
-    """将 DataFrame 写回 Google Sheets (增强版：强制类型转换)"""
+    """将 DataFrame 写回 Google Sheets"""
     conn = st.connection("gsheets", type=GSheetsConnection)
     
-    # 1. 复制数据，避免修改原始缓存
+    # 复制一份数据进行处理，以免影响原数据
     save_df = df.copy()
     
-    # 2. 处理日期：强制转为字符串，处理空时间
-    # 如果是 NaT (空时间)，会被转为 "NaT" 字符串，后面要处理掉
-    save_df['open_date'] = pd.to_datetime(save_df['open_date'], errors='coerce').dt.strftime('%Y-%m-%d')
-    save_df['close_date'] = pd.to_datetime(save_df['close_date'], errors='coerce').dt.strftime('%Y-%m-%d')
+    # --- 修复核心：强制转换为 datetime 类型 ---
+    # errors='coerce' 会把无法转换的数据（如空字符串、乱码）变成 NaT (时间格式的空值)
+    save_df['open_date'] = pd.to_datetime(save_df['open_date'], errors='coerce')
+    save_df['close_date'] = pd.to_datetime(save_df['close_date'], errors='coerce')
+
+    # --- 现在可以安全使用 .dt 了 ---
+    save_df['open_date'] = save_df['open_date'].dt.strftime('%Y-%m-%d')
+    save_df['close_date'] = save_df['close_date'].dt.strftime('%Y-%m-%d')
     
-    # 3. 处理空值：把所有的 NaN, None, "NaT" 都变成空字符串 ""
+    # 把 NaT 和 NaN 替换成空字符串，保持 Google Sheets 干净
     save_df = save_df.fillna("")
-    save_df = save_df.replace("NaT", "")
     
-    # 4. 【关键一步】处理数字类型 (Numpy -> Python原生)
-    # Google Sheets API 极其讨厌 numpy.int64，必须转为标准 int
-    # 这里的操作是把所有数字列强制转换为 Python 对象类型
-    if 'id' in save_df.columns:
-        save_df['id'] = save_df['id'].apply(lambda x: int(x) if x != "" else "")
-    if 'quantity' in save_df.columns:
-        save_df['quantity'] = save_df['quantity'].apply(lambda x: int(x) if x != "" else "")
-        
-    # 5. 写入
     conn.update(worksheet="Sheet1", data=save_df)
 
 def add_buy_position(symbol, buy_price, quantity, open_date, notes):
     """开仓（买入）- 追加行"""
     df = get_data()
     
-    # --- 修复 ID 生成逻辑 ---
+    # 自动生成 ID (取当前最大ID + 1)
     new_id = 1
     if not df.empty and 'id' in df.columns:
-        # 强制把 id 列转为数字，无法转的变成 NaN
-        max_id = pd.to_numeric(df['id'], errors='coerce').max()
-        if pd.notna(max_id):  # 如果 max_id 不是 NaN
-            new_id = int(max_id) + 1
-    # -----------------------
+        if df['id'].max() > 0:
+            new_id = int(df['id'].max()) + 1
             
     new_row = pd.DataFrame([{
         "id": new_id,
@@ -99,7 +90,7 @@ def add_buy_position(symbol, buy_price, quantity, open_date, notes):
         "sell_price": 0.0,
         "quantity": quantity,
         "open_date": pd.to_datetime(open_date),
-        "close_date": None, # 这里留 None，会在 save_data 里被转为空字符串
+        "close_date": None,
         "pnl": 0.0,
         "pnl_percent": 0.0,
         "status": "OPEN",
@@ -236,10 +227,9 @@ if open_df.empty:
     st.info("目前空仓，请在左侧添加买入记录。")
 else:
     open_df['Cost Basis'] = open_df['buy_price'] * open_df['quantity']
-   # 格式化显示日期
+    # 格式化显示日期
     display_open = open_df.copy()
-    # 强制转为 datetime 后再取 date，防止报错    
-    display_open['open_date'] = pd.to_datetime(display_open['open_date'], errors='coerce').dt.date
+    display_open['open_date'] = display_open['open_date'].dt.date
     st.dataframe(display_open[['symbol', 'buy_price', 'quantity', 'open_date', 'notes']], use_container_width=True)
     st.caption(f"当前持仓总成本: ${open_df['Cost Basis'].sum():,.2f}")
 
@@ -277,14 +267,12 @@ if not closed_df.empty:
     with st.expander("查看详细历史交易记录"):
         display_cols = ['symbol', 'open_date', 'close_date', 'buy_price', 'sell_price', 'quantity', 'pnl', 'pnl_percent', 'notes']
         display_closed = closed_df[display_cols].copy()
-        
-        # --- 修复点：强制转换后再取 .dt.date ---
-        display_closed['open_date'] = pd.to_datetime(display_closed['open_date'], errors='coerce').dt.date
-        display_closed['close_date'] = pd.to_datetime(display_closed['close_date'], errors='coerce').dt.date
+        display_closed['open_date'] = display_closed['open_date'].dt.date
+        display_closed['close_date'] = display_closed['close_date'].dt.date
         
         st.dataframe(display_closed, use_container_width=True)
         csv = display_closed.to_csv(index=False).encode('utf-8')
-        st.download_button("📥 导出历史记录 CSV",csv,"closed_trades.csv","text/csv")
+        st.download_button("📥 导出历史记录 CSV", csv, "closed_trades.csv", "text/csv")
 else:
     st.info("暂无卖出记录。")
 
